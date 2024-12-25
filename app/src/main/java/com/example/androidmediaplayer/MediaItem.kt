@@ -1,3 +1,5 @@
 package com.example.androidmediaplayer
 
-data class MediaItem(val filePath: String, val duration: Int)
+import com.google.gson.annotations.SerializedName
+
+data class MediaItem(@SerializedName("file_path") val filePath: String, val duration: Int)

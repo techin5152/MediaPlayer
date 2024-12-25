@@ -177,6 +177,7 @@ class MediaPlayerFragment : Fragment() {
         }
     }
 
+    //อ่านไฟล์ JSON
     private fun loadMediaList() {
         try {
             val inputStream = requireContext().assets.open("media_config.json")
@@ -190,6 +191,8 @@ class MediaPlayerFragment : Fragment() {
 
             mediaList.clear()
             mediaList.addAll(mediaItems)
+
+            Log.w("Json", Gson().toJson(mediaList))
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "Error loading media list", Toast.LENGTH_SHORT).show()
         }
@@ -303,7 +306,7 @@ class MediaPlayerFragment : Fragment() {
         statusIcon.visibility = ImageView.VISIBLE
         handler.postDelayed({
             statusIcon.visibility = ImageView.GONE
-        }, 1000) // Show for 1 second
+        }, 1000)
     }
 
     private fun updateDurationText(duration: Int) {
