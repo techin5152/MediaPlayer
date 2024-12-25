@@ -17,6 +17,8 @@ import android.widget.Toast
 import android.widget.VideoView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import org.json.JSONArray
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -182,15 +184,14 @@ class MediaPlayerFragment : Fragment() {
             val jsonString = reader.readText()
             reader.close()
 
-            val jsonArray = JSONArray(jsonString)
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject = jsonArray.getJSONObject(i)
-                val filePath = jsonObject.getString("file_path")
-                val duration = jsonObject.getInt("duration")
-                mediaList.add(MediaItem(filePath, duration))
-            }
+            val gson = Gson()
+            val listType = object : TypeToken<List<MediaItem>>() {}.type
+            val mediaItems: List<MediaItem> = gson.fromJson(jsonString, listType)
+
+            mediaList.clear()
+            mediaList.addAll(mediaItems)
         } catch (e: Exception) {
-            Toast.makeText(requireActivity(), "เกิดข้อผิดพลาดในการโหลดรายการ", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Error loading media list", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -201,11 +202,6 @@ class MediaPlayerFragment : Fragment() {
 
         val currentMedia = mediaList[currentIndex]
         updateDurationText(currentMedia.duration)
-
-        Log.w(
-            "playMedia",
-            "filePath: ${currentMedia.filePath} | duration: ${currentMedia.duration}"
-        )
 
         if (currentMedia.filePath.endsWith(".mp4")) {
             // กรณี Video
@@ -225,7 +221,7 @@ class MediaPlayerFragment : Fragment() {
                             videoView.stopPlayback() // หยุดวิดีโอเมื่อถึงเวลาที่กำหนด
                             playNextMedia()
                         }
-                    }, currentMedia.duration * 1000L) // เวลาใน json
+                    }, currentMedia.duration * 1000L)
                 }
             } catch (e: Exception) {
                 Toast.makeText(
