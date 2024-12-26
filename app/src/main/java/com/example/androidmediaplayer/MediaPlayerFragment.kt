@@ -17,9 +17,13 @@ import android.widget.Toast
 import android.widget.VideoView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.DataSource
+import com.bumptech.glide.load.engine.GlideException
+import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.Target
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import org.json.JSONArray
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -51,6 +55,11 @@ class MediaPlayerFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_media_player, container, false)
+        return view
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
 
         videoView = view.findViewById(R.id.videoView)
         imageView = view.findViewById(R.id.imageView)
@@ -69,10 +78,24 @@ class MediaPlayerFragment : Fragment() {
         layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
         videoView.layoutParams = layoutParams
 
-        loadMediaList()
-        setupClickListeners()
+        progressBar.visibility = View.VISIBLE
+        startButton.visibility = View.GONE
+        stopButton.visibility = View.GONE
+        pauseButton.visibility = View.GONE
+        resumeButton.visibility = View.GONE
 
-        return view
+        loadMediaList {
+            setupClickListeners()
+            requireActivity().runOnUiThread {
+                progressBar.visibility = View.GONE
+                startButton.visibility = View.VISIBLE
+                stopButton.visibility = View.VISIBLE
+                pauseButton.visibility = View.VISIBLE
+                resumeButton.visibility = View.VISIBLE
+                Toast.makeText(requireContext(), "Media loaded. Ready to play!", Toast.LENGTH_SHORT)
+                    .show()
+            }
+        }
     }
 
     private fun setupClickListeners() {
@@ -82,7 +105,7 @@ class MediaPlayerFragment : Fragment() {
                 isPaused = false
                 toggleButtonsVisibility(false)
                 updateButtonColors("start")
-                playMedia()
+                playMedia() //เริ่มเล่น
                 updateIcon("playing")
             }
         }
@@ -112,9 +135,22 @@ class MediaPlayerFragment : Fragment() {
                 if (videoView.visibility == VideoView.VISIBLE && !videoView.isPlaying) {
                     // กลับสู่การเล่นวิดีโออีกครั้ง
                     val remainingTime = elapsedTime
+
                     if (!videoView.isPlaying) {
                         videoView.start()
+
+                        // หยุดวิดีโอหลังจาก เวลาที่เหลืออยู่
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            if (videoView.isPlaying) {
+                                videoView.stopPlayback()
+                                currentIndex++
+                                playMedia()
+                            }
+                        }, remainingTime * 1000L)
                     }
+
+
+
                     startCountdown(remainingTime)
                 } else if (imageView.visibility == ImageView.VISIBLE) {
                     // กลับมาเริ่มนับถอยหลังเพื่อเล่นภาพอีกครั้ง
@@ -126,7 +162,6 @@ class MediaPlayerFragment : Fragment() {
                     } else {
                         playNextMedia()
                     }
-
                     startCountdown(remainingTime)
                 }
                 updateButtonColors("resume")
@@ -162,7 +197,7 @@ class MediaPlayerFragment : Fragment() {
 
             handler.postDelayed({
                 toggleButtonsVisibility(false)
-            }, 2000)
+            }, 3000)
             true
         }
 
@@ -172,13 +207,13 @@ class MediaPlayerFragment : Fragment() {
 
             handler.postDelayed({
                 toggleButtonsVisibility(false)
-            }, 2000)
+            }, 3000)
             true
         }
     }
 
     //อ่านไฟล์ JSON
-    private fun loadMediaList() {
+    private fun loadMediaList(onComplete: () -> Unit) {
         try {
             val inputStream = requireContext().assets.open("media_config.json")
             val reader = BufferedReader(InputStreamReader(inputStream))
@@ -192,9 +227,16 @@ class MediaPlayerFragment : Fragment() {
             mediaList.clear()
             mediaList.addAll(mediaItems)
 
-            Log.w("Json", Gson().toJson(mediaList))
+            // โหลดไฟล์ล่วงหน้า
+            preloadMedia {
+                onComplete() // เรียก callback เมื่อโหลดเสร็จ
+            }
         } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Error loading media list", Toast.LENGTH_SHORT).show()
+            requireActivity().runOnUiThread {
+                Toast.makeText(requireContext(), "Error loading media list", Toast.LENGTH_SHORT)
+                    .show()
+            }
+            Log.e("MediaPlayer", "Error loading media list", e)
         }
     }
 
@@ -206,57 +248,35 @@ class MediaPlayerFragment : Fragment() {
         val currentMedia = mediaList[currentIndex]
         updateDurationText(currentMedia.duration)
 
-        if (currentMedia.filePath.endsWith(".mp4")) {
-            // กรณี Video
-            val filePath = currentMedia.filePath.substringBeforeLast(".")
-            imageView.visibility = ImageView.GONE
-            videoView.visibility = VideoView.VISIBLE
-            progressBar.visibility = ProgressBar.VISIBLE
+        // ตรวจสอบว่า localFilePath มีค่าหรือไม่
+        if (currentMedia.localFilePath == null) {
+            Log.e("playMedia", "ไฟล์เสียหายข้าม: ${currentMedia.filename}")
+            Toast.makeText(
+                requireContext(),
+                "ไฟล์เสียหายข้าม: ${currentMedia.filename}",
+                Toast.LENGTH_SHORT
+            ).show()
+            currentIndex++
+            playMedia() // ข้ามไปเล่นไฟล์ถัดไป
+            return
+        }
 
-            try {
-                videoView.setVideoURI(Uri.parse("android.resource://${requireContext().packageName}/raw/${filePath}")) //ไฟล์
-                videoView.setOnPreparedListener {
-                    progressBar.visibility = ProgressBar.GONE // ซ่อนแถบความคืบหน้าเมื่อวิดีโอพร้อม
-                    videoView.start()
-                    startCountdown(currentMedia.duration, video)
-                    handler.postDelayed({
-                        if (videoView.isPlaying) {
-                            videoView.stopPlayback() // หยุดวิดีโอเมื่อถึงเวลาที่กำหนด
-                            playNextMedia()
-                        }
-                    }, currentMedia.duration * 1000L)
-                }
-            } catch (e: Exception) {
-                Toast.makeText(
-                    requireActivity(),
-                    "เกิดข้อผิดพลาดในการแสดง video: ${currentMedia.filePath}",
-                    Toast.LENGTH_SHORT
-                ).show()
-                playNextMedia()
-            }
+        if (currentMedia.isVideo) {
+            val videoUri =
+                Uri.parse(currentMedia.localFilePath ?: getDriveUrl(currentMedia.filePath))
+            // เล่นวิดีโอจาก Google Drive
+            playVideo(videoUri)
+            startCountdown(currentMedia.duration) // นับถอยหลังสำหรับวิดีโอ
         } else {
-            // กรณี Image
-            videoView.visibility = VideoView.GONE
-            imageView.visibility = ImageView.VISIBLE
-            progressBar.visibility = ProgressBar.GONE
+            // แสดง ImageView และซ่อน VideoView
+            videoView.visibility = View.GONE
+            imageView.visibility = View.VISIBLE
+            progressBar.visibility = View.GONE
 
-            try {
-                val inputStream = requireContext().assets.open(currentMedia.filePath)
-                val drawable = Drawable.createFromStream(inputStream, null)
-                imageView.setImageDrawable(drawable)
-                startCountdown(currentMedia.duration)
+            val imageUrl = currentMedia.localFilePath ?: getDriveUrl(currentMedia.filePath)
+            playImage(imageUrl)
 
-                handler.postDelayed({
-                    playNextMedia()
-                }, currentMedia.duration * 1000L)
-            } catch (e: Exception) {
-                Toast.makeText(
-                    requireActivity(),
-                    "เกิดข้อผิดพลาดในการแสดงรูปภาพ: ${currentMedia.filePath}",
-                    Toast.LENGTH_SHORT
-                ).show()
-                playNextMedia()
-            }
+            startCountdown(currentMedia.duration) // นับถอยหลังสำหรับวิดีโอ
         }
     }
 
@@ -344,4 +364,102 @@ class MediaPlayerFragment : Fragment() {
             })
         }
     }
+
+    private fun preloadMedia(onComplete: () -> Unit) {
+        var count = 0
+        val totalMediaCount = mediaList.size
+
+        mediaList.forEach { mediaItem ->
+            // ดาวน์โหลดไฟล์จาก Google Drive
+            val driveUrl = getDriveUrl(mediaItem.filePath) //Path File Drive
+            downloadFileFromDrive(
+                requireContext(),
+                driveUrl,
+                mediaItem.filename
+            ) { downloadedFile ->
+                if (downloadedFile != null) {
+                    mediaItem.localFilePath = downloadedFile.absolutePath // save path file
+                }
+                count++
+                if (count == totalMediaCount) onComplete()
+            }
+        }
+    }
+
+    private fun getDriveUrl(fileId: String): String {
+        return "https://drive.google.com/uc?id=$fileId"
+    }
+
+    private fun playVideo(uri: Uri) {
+        videoView.visibility = View.VISIBLE
+        imageView.visibility = View.GONE
+        progressBar.visibility = View.VISIBLE
+
+        videoView.setVideoURI(uri)
+        videoView.setOnPreparedListener {
+            videoView.start()
+            progressBar.visibility = View.GONE
+
+            // หยุดวิดีโอหลังจาก duration
+            val currentMedia = mediaList[currentIndex]
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (videoView.isPlaying) {
+                    videoView.stopPlayback()
+                    currentIndex++
+                    playMedia()
+                }
+            }, currentMedia.duration * 1000L)
+        }
+
+        // หลังจากวิดีโอเล่นจบ
+        videoView.setOnCompletionListener {
+            currentIndex++
+            playMedia()
+        }
+
+        //ดัก error popup vdo
+        videoView.setOnErrorListener { _, _, _ ->
+            requireActivity().runOnUiThread {
+                Toast.makeText(requireContext(), "Error playing video.", Toast.LENGTH_SHORT).show()
+            }
+            true
+        }
+    }
+
+    private fun playImage(imageUrl: String) {
+        Glide.with(this)
+            .load(imageUrl)
+            .listener(object : RequestListener<Drawable> {
+                override fun onLoadFailed(
+                    e: GlideException?,
+                    model: Any?,
+                    target: Target<Drawable>?,
+                    isFirstResource: Boolean
+                ): Boolean {
+                    Toast.makeText(requireContext(), "Failed to load image.", Toast.LENGTH_SHORT)
+                        .show()
+                    currentIndex++
+                    playMedia() // ข้ามไปยัง Media ถัดไป
+                    return false
+                }
+
+                override fun onResourceReady(
+                    resource: Drawable?,
+                    model: Any?,
+                    target: Target<Drawable>?,
+                    dataSource: DataSource?,
+                    isFirstResource: Boolean
+                ): Boolean {
+                    imageView.setImageDrawable(resource)
+                    // รอเวลา duration แล้วไปยัง Media ถัดไป
+                    handler.postDelayed({
+                        currentIndex++
+                        playMedia()
+                    }, mediaList[currentIndex].duration * 1000L)
+                    return true
+                }
+            })
+            .into(imageView)
+    }
+
 }

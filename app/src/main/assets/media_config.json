@@ -1,9 +1,6 @@
 [
-  {"file_path": "image1.jpg", "duration": 5},
-  {"file_path": "no_image4.jpg", "duration": 5},
-  {"file_path": "no_image5.jpg", "duration": 5},
-  {"file_path": "no_image6.jpg", "duration": 5},
-  {"file_path": "video1.mp4", "duration": 10},
-  {"file_path": "no_video.mp4", "duration": 10},
-  {"file_path": "image2.jpg", "duration": 15}
+    {"file_path": "1mD70xdHO3D0hJ9tJtvSr7_RV39XauciB", "filename":"image1.jpg" ,"duration": 5, "isExternal": true, "isVideo": false},
+    {"file_path": "1mD70xdHO3D0hJ9tJtvSr7_RV39XauciB222", "filename":"image3.jpg" ,"duration": 5, "isExternal": true, "isVideo": false},
+    {"file_path": "1tWDFWkmo8k597pjtzLZyHs0p08_i8Bzm", "filename":"video1.mp4", "duration": 10, "isExternal": true, "isVideo": true},
+    {"file_path": "15vqHzQXvkT1z8I4L7To9Xwby_zGNRAzs", "filename":"image2.jpg", "duration": 15, "isExternal": true, "isVideo": false}
 ]
